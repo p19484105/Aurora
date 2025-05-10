@@ -20,6 +20,9 @@
 
 /* Begin PBXFileReference section */
 		F5A9B0D92DCEBF120056A1A8 /* Aurora */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Aurora; sourceTree = BUILT_PRODUCTS_DIR; };
+		F5B2C2ED2DCF93CD007D7182 /* LICENSE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = LICENSE.md; sourceTree = "<group>"; };
+		F5B2C2F22DCFBC0C007D7182 /* data.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = data.csv; sourceTree = "<group>"; };
+		F5B2C2F32DCFBC0C007D7182 /* logging */ = {isa = PBXFileReference; lastKnownFileType = text; path = logging; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -44,6 +47,9 @@
 		F5A9B0D02DCEBF120056A1A8 = {
 			isa = PBXGroup;
 			children = (
+				F5B2C2F22DCFBC0C007D7182 /* data.csv */,
+				F5B2C2ED2DCF93CD007D7182 /* LICENSE.md */,
+				F5B2C2F32DCFBC0C007D7182 /* logging */,
 				F5A9B0DB2DCEBF120056A1A8 /* Aurora */,
 				F5A9B0DA2DCEBF120056A1A8 /* Products */,
 			);
