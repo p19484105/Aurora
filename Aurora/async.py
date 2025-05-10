@@ -1,99 +1,119 @@
-import aiohttp, asyncio, csv, os
+import pandas as pd
+import talib as ta
+import aiohttp
+import asyncio
+import csv
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from asyncio import Semaphore
 
+# Configuration constants
 BASE = "https://api.exchange.coinbase.com"
 PRODUCT = "ETH-USD"
-GRANULARITY = 86400
-DAYS = 1800 # Tiemframe
+GRANULARITY = 3600 # Frequency
+DAYS = 945
 CHUNK = 300 # API limit
+CONCURRENT = 10 # Concurrent requests
 
-async def chunk(session, start, end):
+# Pull request configuration
+async def pull(session, start, end, semaphore):
     url = f"{BASE}/products/{PRODUCT}/candles"
     params = {
         "start": start.isoformat(),
         "end": end.isoformat(),
         "granularity": GRANULARITY,
     }
-    async with session.get(url, params=params) as r:
-        return await r.json() if r.status == 200 else []
+
+    # API control
+    async with semaphore:
+        try:
+            async with session.get(url, params=params) as response:
+                return await response.json() if response.status == 200 else []
+        except Exception as e:
+            print(f"Error fetching data: {e}")
+            return []
+
+# Initialization
+async def generate(start, end):
+    return [
+        (start + timedelta(days=i), min(start + timedelta(days=i+1), end))
+        for i in range((end - start).days)
+    ]
+
+# Interpretation
+async def process(session, chunks, semaphore):
+    return await asyncio.gather(*(pull(session, s, e, semaphore) for s, e in chunks))
+
+# Writing configuration
+async def write(filename, data):
+    rows = [
+        [
+            datetime.fromtimestamp(entry[0], tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        ] + [round(entry[i], 4) for i in [3, 2, 1, 4, 5]]
+        for chunk in data for entry in chunk
+    ]
+    rows.sort()
+
+    # Parsing
+    if rows:
+        with open(filename, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["date", "open", "high", "low", "close", "volume"])
+            writer.writerows(rows)
+            
+    print("Data parsed.")
 
 async def main():
-    end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    start = end - timedelta(days=DAYS)
     filename = os.getenv("DATA")
     if not filename:
-        raise Exception("Environment failure.")
+        raise Exception("Environment variable 'DATA' is not set.")
 
-    # Split into chunks
-    chunks = []
-    current = start
-    while current < end:
-        close = min(current + timedelta(days=CHUNK), end)
-        chunks.append((current, close))
-        current = close
+    # Time range setup
+    end = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    start = end - timedelta(days=DAYS)
 
-    # Run fetches concurrently
+    # Semaphore for limiting concurrent requests
+    semaphore = Semaphore(CONCURRENT)
+
+    # Generate chunks and fetch data concurrently
+    chunks = await generate(start, end)
     async with aiohttp.ClientSession() as session:
-        tasks = [chunk(session, s, e) for s, e in chunks]
-        results = await asyncio.gather(*tasks)
+        results = await process(session, chunks, semaphore)
 
-    seen, rows = set(), []
-    for data in results:
-        for entry in data:
-            ts = datetime.fromtimestamp(entry[0], tz=timezone.utc).date().isoformat()
-            if entry[0] not in seen:
-                seen.add(entry[0])
-                values = [round(entry[i], 4) for i in [3, 2, 1, 4, 5]] # open, high, low, close, volume
-                rows.append([ts] + values)
-
-    rows.sort()
-    with Path(filename).open("w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["date", "open", "high", "low", "close", "volume"])
-        w.writerows(rows)
-
-    print("Database configured.")
+    # Save the results to a CSV file
+    await write(filename, results)
 
 asyncio.run(main())
 
-# RSI (Relative Strength Index): Measures the magnitude of recent price changes to evaluate overbought or oversold conditions.
-# Formula: RSI = 100 - (100 / (1 + RS)), where RS is the average gain divided by the average loss over a specified period.
-# Period: 14 days (14 is the default period in the typical RSI calculation).
-# Interpretation: Values above 70 indicate overbought conditions; values below 30 indicate oversold conditions.
+try:
+    import talib as ta
+except Exception as e:
+    raise ImportError("TA-Lib is not properly installed. Please install the C library and Python wrapper.") from e
 
-# SMA (Simple Moving Average): A simple average of the closing prices over a specified period.
-# Formula: SMA = Sum of closing prices over a period divided by the period length.
-# Period: 20 days (default period for the SMA).
-# Interpretation: Used to smooth price data and identify trends over time.
+filepath = os.getenv('DATA')
+if not filepath:
+    raise RuntimeError("Please set the DATA environment variable to the CSV file path.")
 
-# Bollinger Bands: Used to measure the volatility of an asset’s price and to identify potential overbought or oversold conditions.
-# Formula: Upper Band = SMA + (Standard Deviation × Multiplier), Lower Band = SMA - (Standard Deviation × Multiplier).
-# Period: 20 days (same as the SMA).
-# Multiplier: 2 (commonly used multiplier for Bollinger Bands).
-# Interpretation: Prices tend to bounce within the bands. Prices outside the bands may indicate an extreme condition (overbought or oversold).
+df = pd.read_csv(filepath, parse_dates=['date'])
+df.sort_values('date', inplace=True)
+close = df['close']
 
-# EMA (Exponential Moving Average): Gives more weight to recent prices, making it more responsive to new information.
-# Formula: EMA = (Close - Previous EMA) × (2 / (Period + 1)) + Previous EMA.
-# Period: 9 days (default period used for the EMA in this script).
-# Interpretation: EMA reacts faster to price changes than the SMA, providing more current trend information.
+# Technical indicators
+df['RSI'] = ta.RSI(close, timeperiod=14)
+df['SMA'] = ta.SMA(close, timeperiod=20)
+upper, _, lower = ta.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
+df['upper'] = upper
+df['lower'] = lower
+df['EMA'] = ta.EMA(close, timeperiod=9)
+macd, signal, hist = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
+df['MACD'] = macd
+df['signal'] = signal
+df['histogram'] = hist
 
-# SMMA (Smoothed Moving Average): A type of moving average similar to the EMA but uses a different smoothing factor.
-# Formula: SMMA = (Previous SMMA × (Period - 1) + Current Close) divided by the period.
-# Period: 7 days (default period used for the SMMA in this script).
-# Interpretation: This moving average provides a smoother curve and is less reactive to price changes than the EMA but more than the SMA.
+df.dropna(inplace=True)
+for col in df.select_dtypes(include='number'):
+    df[col] = df[col].round(4)
 
-# MACD (Moving Average Convergence Divergence): Measures the difference between two exponential moving averages (EMAs), typically used to indicate changes in momentum.
-# Formula: MACD = EMA (fast) - EMA (slow).
-# Fast EMA: 12-day period.
-# Slow EMA: 26-day period.
-# Signal Line: The 9-day EMA of the MACD value.
-# Histogram: The difference between the MACD line and the signal line (MACD - Signal).
-# Interpretation: A MACD cross above the signal line is considered a bullish signal, and a cross below is considered a bearish signal.
-
-# Adjustments for Customization:
-# Period adjustments: You can modify the period for indicators like SMA, EMA, RSI, and SMMA based on your strategy or timeframe.
-# For instance, if you are working with minute-level data, you may want a shorter period such as 5 or 10.
-# Multiplier in Bollinger Bands: The standard multiplier is 2, but for more conservative strategies, a multiplier of 1.5 or 2.5 may be used.
-# MACD Signal Line: The standard signal line period is 9, but it can be adjusted depending on how sensitive you want the system to be to price changes.
-# Histograms and Divergences: Some traders use MACD histogram and divergence patterns as indicators for price action. If the MACD histogram shows increasing divergence from price action, this may indicate a potential reversal.
+df.to_csv(filepath, index=False)
+print("Data analyzed.")
