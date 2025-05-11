@@ -19,7 +19,7 @@ CONCURRENT = 10 # Concurrent requests
 RETRIES = 5 # Max retry attempts
 MIN = 1 # Minimum backoff time in seconds
 MAX = 60 # Maximum backoff time in seconds
-LOG = os.getenv('LOG') # Logging
+LOG = os.getenv('logging') # Logging
 
 # Basic logging settings
 logging.basicConfig(filename=LOG, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -123,48 +123,3 @@ async def main():
 
 # Run the main async function
 asyncio.run(main())
-
-# Indicator system requirements
-try:
-    import talib as ta
-except Exception as e:
-    raise ImportError("TA-Lib is not properly installed. Please install the C library and Python wrapper.") from e
-
-# Reload environment
-filepath = os.getenv('DATA')
-if not filepath:
-    raise RuntimeError("Environment variable not set.")
-
-# Initialization
-df = pd.read_csv(filepath, parse_dates=['date'])
-df.sort_values('date', inplace=True)
-close = df['close']
-
-# Calculate technical indicators
-df['lower'], _, df['upper'] = ta.BBANDS(close, timeperiod=20, nbdevup=2, nbdevdn=2)
-df['SMA'] = ta.SMA(close, timeperiod=20)
-df['EMA'] = ta.EMA(close, timeperiod=9)
-macd, signal, hist = ta.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-df['MACD'] = macd
-df['signal'] = signal
-df['histogram'] = hist
-df['RSI'] = ta.RSI(close, timeperiod=14)
-
-df.dropna(inplace=True)
-
-# Round numeric columns
-for col in df.select_dtypes(include='number'):
-    df[col] = df[col].round(2)
-
-# Define original columns and desired indicator order
-column = ['date', 'open', 'high', 'low', 'close', 'volume']
-indicator = ['SMA', 'upper', 'lower', 'EMA', 'RSI', 'histogram', 'MACD', 'signal',]
-
-# Ensure we only reorder available indicator columns
-available = [col for col in indicator if col in df.columns]
-
-# Rebuild DataFrame with original + ordered indicators
-df = pd.concat([df[column], df[available]], axis=1)
-
-df.to_csv(filepath, index=False)
-print("Technical indicators calculated.")
