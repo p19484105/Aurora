@@ -26,11 +26,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F5928A0C2DCFD866001628A5 /* Models */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Models;
-			sourceTree = "<group>";
-		};
 		F5A9B0DB2DCEBF120056A1A8 /* Aurora */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Aurora;
@@ -56,7 +51,6 @@
 				F5928A122DCFE2C4001628A5 /* LICENSE.md */,
 				F5928A132DCFE2C4001628A5 /* logging */,
 				F5A9B0DB2DCEBF120056A1A8 /* Aurora */,
-				F5928A0C2DCFD866001628A5 /* Models */,
 				F5A9B0DA2DCEBF120056A1A8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,7 +79,6 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F5928A0C2DCFD866001628A5 /* Models */,
 				F5A9B0DB2DCEBF120056A1A8 /* Aurora */,
 			);
 			name = Aurora;
