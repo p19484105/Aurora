@@ -11,13 +11,13 @@ from asyncio import Semaphore
 # Configuration constants
 BASE = "https://api.exchange.coinbase.com"
 PRODUCT = "ETH-USD"
-GRANULARITY = 3600  # Frequency (1 hour granularity)
+GRANULARITY = 3600 # Frequency (1 hour granularity)
 DAYS = 945
-CHUNK = 300  # API limit (300 minutes = 5 hours)
-CONCURRENT = 10  # Concurrent requests
-RETRIES = 5  # Max retry attempts
-MIN = 1  # Minimum backoff time in seconds
-MAX = 60  # Maximum backoff time in seconds
+CHUNK = 300 # API limit (300 minutes = 5 hours)
+CONCURRENT = 10 # Concurrent requests
+RETRIES = 5 # Max retry attempts
+MIN = 1 # Minimum backoff time in seconds
+MAX = 60 # Maximum backoff time in seconds
 
 def timebase():
     # Returns time to the current hour
@@ -42,10 +42,10 @@ async def pull(session, start, end, semaphore):
                 async with session.get(url, params=params) as response:
                     if response.status == 200:
                         return await response.json()
-                    elif response.status == 400:  # Bad Request
+                    elif response.status == 400: # Bad Request
                         print(f"[ERROR] Bad request for {start} to {end}.")
                         return []
-                    elif response.status == 429:  # Rate limit exceeded
+                    elif response.status == 429: # Rate limit exceeded
                         print(f"[WARN] Rate limit exceeded for {start} to {end}. Retrying in {backoff} seconds...")
                         await asyncio.sleep(backoff)
                         retries += 1
@@ -66,7 +66,7 @@ async def generate(start, end):
     chunks = []
     current = start
     while current < end:
-        next = min(current + timedelta(days=1), end)  # Break into daily chunks
+        next = min(current + timedelta(days=1), end) # Break into daily chunks
         chunks.append((current, next))
         current = next
     return chunks
@@ -78,8 +78,7 @@ async def process(session, chunks, semaphore):
 # Write data to CSV
 async def write(filename, data):
     rows = [[datetime.fromtimestamp(entry[0], tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')] + [round(entry[i], 4) for i in [3, 2, 1, 4, 5]]
-        for chunk in data for entry in chunk
-    ]
+        for chunk in data for entry in chunk]
     rows.sort()
 
     if rows:
